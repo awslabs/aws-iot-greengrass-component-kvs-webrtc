@@ -1,22 +1,3 @@
-<<<<<<< HEAD
-## My Project
-
-TODO: Fill this README out!
-
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
-
-## Security
-
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
-
-## License
-
-This library is licensed under the MIT-0 License. See the LICENSE file.
-
-=======
 # AWS IoT Greengrass V2 Component to send video over Kinesis Video Streams with WebRTC
 
 Using this project, you can create an [AWS IoT Greengrass V2 (GGv2)](https://docs.aws.amazon.com/greengrass/v2/developerguide/what-is-iot-greengrass.html) Component that will acquire video from a [Video for Linux (v4l)](https://www.kernel.org/doc/html/v4.9/media/uapi/v4l/v4l2.html) device, open an [Amazon Kinesis Video Streams (KVS) with WebRTC](https://docs.aws.amazon.com/kinesisvideostreams-webrtc-dg/latest/devguide/what-is-kvswebrtc.html) signaling channel as 'Master', and when a 'Viewer' connects to that signaling channel, publish the acquired video. This project uses [GStreamer](https://gstreamer.freedesktop.org/) to acquire, process, and encode video. The 'pipeline' and source can easily be changed or customized to suit different video sources, processing, or formats.
@@ -613,4 +594,3 @@ cat card0/stream0
 ### Testing WebRTC
 
 Open the [WebRTC Test Page](https://awslabs.github.io/amazon-kinesis-video-streams-webrtc-sdk-js/examples/index.html), paste in `Access Key Id`, `Secret Access Key`, and `CHANNEL_NAME`, then **Start Viewer**.
->>>>>>> 4478e1d (initial commit)
