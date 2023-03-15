@@ -2,7 +2,7 @@
 
 Using this project, you can create an [AWS IoT Greengrass V2 (GGv2)](https://docs.aws.amazon.com/greengrass/v2/developerguide/what-is-iot-greengrass.html) Component that will acquire video from a [Video for Linux (v4l)](https://www.kernel.org/doc/html/v4.9/media/uapi/v4l/v4l2.html) device, open an [Amazon Kinesis Video Streams (KVS) with WebRTC](https://docs.aws.amazon.com/kinesisvideostreams-webrtc-dg/latest/devguide/what-is-kvswebrtc.html) signaling channel as 'Master', and when a 'Viewer' connects to that signaling channel, publish the acquired video. This project uses [GStreamer](https://gstreamer.freedesktop.org/) to acquire, process, and encode video. The 'pipeline' and source can easily be changed or customized to suit different video sources, processing, or formats.
 
-The component is packaged as a [Docker](https://www.docker.com/) container to help ensure portability and minimize conflicts with system libraries, packages, and other configurations. **As noted below, take to match the Instruction Set Architecture (ISA)--e.g. x86 or Arm--of the system that builds and packages the container with the target.**
+The component is packaged as a [Docker](https://www.docker.com/) container to help ensure portability and minimize conflicts with system libraries, packages, and other configurations. **As noted below, take care to match the Instruction Set Architecture (ISA)--e.g. x86 or Arm--of the system that builds and packages the container with the target.**
 
 This project targets Linux hosts and was developed using Linux and Mac desktop environments.
 
@@ -20,7 +20,7 @@ This project will guide through
    - (Optionally) [Validate](https://edgecv.workshop.aws/spells/validate-ggv2.html) your installation
    - and (Optional) learn how to [Deploy](https://edgecv.workshop.aws/spells/deploy-component.html) a Component
 
-* [Install Docker](https://docs.docker.com/engine/install/) on the Greengrass Core. (Optionally) Install Docker on a build machine with compatible ISA.
+* [Docker Installed](https://docs.docker.com/engine/install/) on the Greengrass Core so that the Greengrass user (`ggc_user`), and optionally other users, can run docker containers. (Optionally) Install Docker on a build machine with compatible ISA.
 * an AWS Account, If you don't have one, see [Set up an AWS account](https://docs.aws.amazon.com/greengrass/v2/developerguide/setting-up.html#set-up-aws-account)
 * AWS CLI v2 [installed](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) and [configured](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html) with permissions to
 
@@ -42,14 +42,33 @@ ls -l /dev/video*
 
 Your devices may differ in number, etc. Also note the group ownership for your desired device (e.g. `/dev/video0`)--typically `video`.
 
-2. Add the `ggc_user` to the `video` group.
+2. Check the video device format
+
+_If your system does not have `v4l2-ctl`, install it with `sudo apt install v4l2-utils`._
+
+```bash
+v4l2-ctl --list-formats-ext --device /dev/video0
+# ioctl: VIDIOC_ENUM_FMT
+#        Type: Video Capture
+#
+#        [0]: 'MJPG' (Motion-JPEG, compressed)
+#                Size: Discrete 1920x1080
+#                        Interval: Discrete 0.017s (60.000 fps)
+#        [1]: 'YUYV' (YUYV 4:2:2)
+#                Size: Discrete 1920x1080
+#                        Interval: Discrete 0.017s (60.000 fps)
+```
+
+**NOTE**: Your output may be different from the above output. Verify that `MJPG` format is one of the available outputs. If not, it may be possible to adjust the GStreamer pipeline to perform an appropriate transformation.
+
+3. Add the `ggc_user` to the `video` group.
 
 ```bash
 # change this command if necessary for different group or GGv2 user
 sudo usermod -aG video ggc_user
 ```
 
-3. Verify Docker
+4. Verify Docker
 
 **On the target Greengass core**, verify Docker functionality.
 
@@ -60,7 +79,7 @@ sudo docker run hello-world
 
 *(Optional)* Verify Docker on the build machine, if used.
 
-4. Add the `ggc_user` to the docker group.
+5. Add the `ggc_user` to the docker group.
 
 ```bash
 # modify the user if your GGv2 installation has a different user account
@@ -92,7 +111,7 @@ docker build --rm -t <name> .
 
 3. Test the container
 
-***Testing is optional. If you're happy with the container, you can proceed to package and deploy.***
+***Testing is optional -- BUT RECOMMENDED. If you're happy with the container, you can proceed to package and deploy.***
 
 (Optionally), if you built the image on a different system than your Greengrass core, transfer the image to the target machine.
 
@@ -134,7 +153,7 @@ AWS_KVS_LOG_LEVEL=3
 " >.env
 ```
 
-Pass the environment to the docker container
+Pass the environment to the docker container with `--env-file`, then test the container and the pipeline
 
 ```bash
 CHANNEL_NAME=<kvs-webrtc-channel-name>
@@ -142,9 +161,11 @@ CHANNEL_NAME=<kvs-webrtc-channel-name>
 docker run --env-file ./.env --device=/dev/video0 kvs $CHANNEL_NAME
 ```
 
+**NB**: by default, the KVS application will send **VIDEO ONLY**, to send both audio and video append `audio-video` to the above `docker` command.
+
 ## Part 3 - Package and Publish as GGv2 Component
 
-It is common practice when building Greengrass components to maintain a 'shadow' of the artifacts and recipes under user home. This guide continues that practice as it makes some of the preparation convenient. Other workflows are possible.
+It is common practice when building Greengrass components to maintain a 'shadow' of the artifacts and recipes under user home. This guide continues that practice (shadowing components in `~/GreengrassCore` in the following commands) as it makes some of the preparation convenient (notably sync'ing file trees to S3). Other workflows are possible.
 
 1. archive the Docker image
 
@@ -168,7 +189,7 @@ export container_name=<name of your container>
 docker save $container_name > ~/GreengrassCore/artifacts/$component_name/$component_version/$container_name.tar
 ```
 
-2. (Optional) remove the original image and reload
+2. (Optional) remove the original image and reload. This is a good way to verify docker save and load functionality with the container.
 
 ```sh
 docker image ls $container_name
@@ -184,6 +205,9 @@ docker load -i ~/GreengrassCore/artifacts/$component_name/$component_version/$co
 
 # and the container should now be in the list
 docker image ls
+
+# if desired, clean up intermediate containers
+#docker system prune
 ```
 
 3. upload script artifacts to S3
@@ -211,7 +235,7 @@ aws s3 sync ~/GreengrassCore/ s3://$bucket_name/
 mkdir -p ~/GreengrassCore/recipes/
 touch ~/GreengrassCore/recipes/$component_name-$component_version.json
 
-# paste these values
+# paste these values into the editor, next
 echo $component_name " " $component_version " " $bucket_name
 
 # edit using IDE or other editor
@@ -319,7 +343,7 @@ lsusb -t
 #    |__ Port 6: Dev 4, If 1, Class=Wireless, Driver=btusb, 12M
 ```
 
-*NOTE* the capture card is found on `Bus 02.Port 1` which happens to be the 'side' USB connector on the Beelink.  Two Video and Two audio interfaces is normal and correct. Your devices may be different. As long as we have TWO Video and TWO Audio devices enumerated AND they are bound to the port where the device is connected, the device connection can be considered correct.
+*NOTE* a webcam is found on `Bus 02.Port 1`, specific bus mapping will vary.  Two Video and Two audio interfaces is normal and correct. Your devices may be different. 
 
 If using a non-USB device, validate connectivity as appropriate.
 
@@ -331,7 +355,7 @@ ls -l /dev/v4l/by-path/
 # lrwxrwxrwx 1 root root 12 Aug 12 09:42 pci-0000:00:15.0-usb-0:4:1.0-video-index1 -> ../../video1
 ```
 
-and, yes... two video capture devices matching the USB devices. If you have additional devices, they may be listed here as well.  Do take note of the symbolic link for the device you wish to use (`/dev/video0` in this guide). Verify that the path (e.g. `pci-0000:00:15.0-usb-0:4:1.0-video-index0` is correct for the physical connection of your device).
+Note two video capture devices matching the USB devices. If you have additional devices, they may be listed here as well.  Do take note of the symbolic link for the device you wish to use (`/dev/video0` in this guide). Verify that the path (e.g. `pci-0000:00:15.0-usb-0:4:1.0-video-index0` is correct for the physical connection of your device).
 
 Now check the video device binding
 
@@ -434,24 +458,11 @@ v4l2-ctl --device=/dev/video0 --all
 #        Read buffers     : 0
 ```
 
-Check formats
 
-```yaml
-v4l2-ctl --list-formats-ext --device /dev/video0
-# ioctl: VIDIOC_ENUM_FMT
-#        Type: Video Capture
-#
-#        [0]: 'MJPG' (Motion-JPEG, compressed)
-#                Size: Discrete 1920x1080
-#                        Interval: Discrete 0.017s (60.000 fps)
-#        [1]: 'YUYV' (YUYV 4:2:2)
-#                Size: Discrete 1920x1080
-#                        Interval: Discrete 0.017s (60.000 fps)
-```
 
 ### Grab a test frame
 
-```sh
+```bash
 v4l2-ctl --device /dev/video0 --set-fmt-video=width=1920,height=1080,pixelformat=MJPG --stream-mmap --stream-to=/tmp/output.jpg --stream-count=1
 # <     # this '<' is the normal output
 
@@ -514,6 +525,16 @@ v4l2-ctl --device /dev/video0 --set-fmt-video=width=1920,height=1080,pixelformat
 This GStreamer pipeline will fetch audio and video and write an MPEG-4 file.  If the MP4 file is accurate, all video and audio devices are configured and functioning properly.
 
 ```bash
+# video only
+gst-launch-1.0  -e  \
+  v4l2src device=/dev/video0 ! queue ! jpegdec ! \
+  videoscale ! video/x-raw,width=1280,height=720 ! \
+  videorate ! video/x-raw,framerate=30/1 ! \
+  videoconvert ! x264enc bframes=0 speed-preset=veryfast bitrate=512 \
+    byte-stream=TRUE tune=zerolatency ! \
+  filesink location=test.mp4 sync=false
+
+# with an audio device
 gst-launch-1.0  -e  \
   v4l2src device=/dev/video0 ! queue ! jpegdec ! \
   videoscale ! video/x-raw,width=1280,height=720 ! \
@@ -524,6 +545,9 @@ gst-launch-1.0  -e  \
   voaacenc ! aacparse ! qtmux name=mux ! \
   filesink location=test.mp4 sync=false
 ```
+
+**NB**: If your device does not supply `MJPG` formatted images, explore available GStreamer [plugins](https://gstreamer.freedesktop.org/documentation/plugins_doc.html?gi-language=c) or other resources to transform one of the formats that the `x264enc` plugin will accept (e.g. `video/x-raw`).
+
 
 ### Testing and Troubleshooting Audio
 
