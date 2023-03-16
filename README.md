@@ -305,6 +305,80 @@ aws greengrassv2 create-component-version --inline-recipe fileb://~/GreengrassCo
 
 You have now created a Greengrass V2 Docker component and uploaded it to your AWS Account. Note that when deploying the component, the channel name can be remapped. It is also possible to refactor the recipe to move the video device description to a configurable option.
 
+## Testing without a Camera? Install v4l loopback device 
+
+If you are using a system without a camera, such as a cloud instance, or as part of a CI/CD pipeline, or perhaps just to use a known, consistent video feed, set up a loopback device.
+
+The [v4l2loopback device](https://github.com/umlaeute/v4l2loopback) is used to inject known video content into the `/dev/video0` device (using GStreamer). As this device uses a kernel module, it is not containerizable, but should work in a virtual machine. It has been validated to work on an EC2 instance.
+
+### Install and configure the Loopback device on the host
+
+**These instructions assume an Ubuntu 20.04 or similar host**
+
+```bash
+sudo apt-get update && sudo apt-get upgrade -y
+```
+
+**Install V4L2 utils**
+
+```bash
+sudo apt-get install v4l-utils
+```
+
+**Build loopback kernel module**
+
+```bash
+cd ~
+# or other directory where you keep your source
+
+# clone latest release tag -- v0.12.7 as of this writing
+git clone -b v0.12.7 https://github.com/umlaeute/v4l2loopback.git
+cd v4l2loopback
+
+make
+
+sudo make install
+sudo depmod -a
+
+sudo modprobe v4l2loopback
+```
+
+### configure the loopback device
+
+The device must be configured after rebooting or when you wish to change configuration -- when changing resolution, for example.
+
+```bash
+# load the module after a reboot
+sudo modprobe v4l2loopback
+
+v4l2-ctl -d /dev/video0 -c timeout=3000 
+v4l2loopback-ctl set-timeout-image /dev/video0 testcard.png  
+# ignore ERROR about pipeline not wanting to run
+sudo v4l2loopback-ctl set-fps /dev/video0 30
+sudo v4l2loopback-ctl set-caps /dev/video0 "UYVY:1280x720@30/1" 
+```
+
+### Inject test video with GStreamer
+
+**Sample Video**
+
+Test feeds are available from the D2 City data set, which is widely cited and can be downloaded from (https://www.scidb.cn/en/detail?dataSetId=804399692560465920). 
+
+This section was developed by capturing a hour of YouTube 'dashcam' videos and encoding to MP4 - `~/dashcam.mp4`. To use another file, change the reference in the command below as needed.
+
+**Run GStreamer Pipeline**
+
+in a new window, ensure the v4l loopback device is [setup](#Install%20v4l%20loopback%20device), then
+
+```bash
+gst-launch-1.0 uridecodebin uri=file:///home/ubuntu/dashcam.mp4 ! \
+  decodebin name=demux demux. ! videoconvert ! \
+  videoscale ! 'video/x-raw,format=UYVY,width=1920,height=1080,framerate=30/1' ! \
+  v4l2sink device=/dev/video0
+```
+
+If your loopback device is other than `/dev/video0`, modify the above command appropriately.
+
 ## Troubleshooting
 
 ### To fix a failed deployment:
