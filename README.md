@@ -2,6 +2,13 @@
 
 Using this project, you can create an [AWS IoT Greengrass V2 (GGv2)](https://docs.aws.amazon.com/greengrass/v2/developerguide/what-is-iot-greengrass.html) Component that will acquire video from a [Video for Linux (v4l)](https://www.kernel.org/doc/html/v4.9/media/uapi/v4l/v4l2.html) device, open an [Amazon Kinesis Video Streams (KVS) with WebRTC](https://docs.aws.amazon.com/kinesisvideostreams-webrtc-dg/latest/devguide/what-is-kvswebrtc.html) signaling channel as 'Master', and when a 'Viewer' connects to that signaling channel, publish the acquired video. This project uses [GStreamer](https://gstreamer.freedesktop.org/) to acquire, process, and encode video. The 'pipeline' and source can easily be changed or customized to suit different video sources, processing, or formats.
 
+![project architecture](images/arch.png)
+
+1. Using this guide, a GGv2 Component, wrapping a Docker container, is created on your local Development host and uploaded to an S3 Bucket
+2. The Component is deployed to the Target Device, running Greengrass Nucleus, which will manage (Install, Start, Stop) the Component
+3. Video from v4l devices -- such as camera attached the Target Device -- is acquired by the Component and published over KVS-WebRTC
+4. Viewers can connect to the KVS-WebRTC channel and view the video stream.
+
 The component is packaged as a [Docker](https://www.docker.com/) container to help ensure portability and minimize conflicts with system libraries, packages, and other configurations. **As noted below, take care to match the Instruction Set Architecture (ISA)--e.g. x86 or Arm--of the system that builds and packages the container with the target.**
 
 This project targets Linux hosts and was developed using Linux and Mac desktop environments.
