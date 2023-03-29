@@ -1,0 +1,99 @@
+diff --git a/samples/kvsWebRTCClientMasterGstreamerSample.c b/samples/kvsWebRTCClientMasterGstreamerSample.c
+index 185859bd5..f6b2b426d 100644
+--- a/samples/kvsWebRTCClientMasterGstreamerSample.c
++++ b/samples/kvsWebRTCClientMasterGstreamerSample.c
+@@ -6,6 +6,7 @@ extern PSampleConfiguration gSampleConfiguration;
+ 
+ // #define VERBOSE
+ 
++
+ GstFlowReturn on_new_sample(GstElement* sink, gpointer data, UINT64 trackid)
+ {
+     GstBuffer* buffer;
+@@ -151,14 +152,26 @@ PVOID sendGstreamerAudioVideo(PVOID args)
+                     "video/x-h264,stream-format=byte-stream,alignment=au,profile=baseline ! appsink sync=TRUE emit-signals=TRUE name=appsink-video",
+                     &error);
+             } else {
+-                pipeline = gst_parse_launch(
+-                    "autovideosrc ! queue ! videoconvert ! video/x-raw,width=1280,height=720,framerate=[30/1,10000000/333333] ! "
+-                    "x264enc bframes=0 speed-preset=veryfast bitrate=512 byte-stream=TRUE tune=zerolatency ! "
+-                    "video/x-h264,stream-format=byte-stream,alignment=au,profile=baseline ! appsink sync=TRUE emit-signals=TRUE name=appsink-video",
+-                    &error);
++                pipeline = 
++                    gst_parse_launch(
++                        "v4l2src device=/dev/video0 ! queue ! jpegdec ! "
++                        "videoscale ! video/x-raw,width=1280,height=720 ! "
++                        "videorate ! video/x-raw,framerate=15/1 ! "
++                        "videoconvert ! x264enc ! video/x-h264,stream-format=byte-stream,alignment=au,profile=baseline ! "
++                        "appsink sync=TRUE emit-signals=TRUE name=appsink-video",
++                        &error);
++                /**
++                 * TEST Pipeline
++                 
++                    gst-launch-1.0 \
++                        v4l2src device=/dev/video0 ! queue ! jpegdec ! \
++                        videoscale ! video/x-raw,width=1280,height=720 ! \
++                        videorate ! video/x-raw,framerate=15/1 ! \
++                        videoconvert ! x264enc ! video/x-h264,stream-format=byte-stream,alignment=au,profile=baseline ! \
++                        fakesink
++                 */
+             }
+-            break;
+-
++            break;
+         case SAMPLE_STREAMING_AUDIO_VIDEO:
+             if (pSampleConfiguration->useTestSrc) {
+                 pipeline = gst_parse_launch("videotestsrc is-live=TRUE ! queue ! videoconvert ! video/x-raw,width=1280,height=720,framerate=30/1 ! "
+@@ -170,17 +183,35 @@ PVOID sendGstreamerAudioVideo(PVOID args)
+                                             &error);
+             } else {
+                 pipeline =
+-                    gst_parse_launch("autovideosrc ! queue ! videoconvert ! video/x-raw,width=1280,height=720,framerate=[30/1,10000000/333333] ! "
+-                                     "x264enc bframes=0 speed-preset=veryfast bitrate=512 byte-stream=TRUE tune=zerolatency ! "
+-                                     "video/x-h264,stream-format=byte-stream,alignment=au,profile=baseline ! appsink sync=TRUE emit-signals=TRUE "
+-                                     "name=appsink-video autoaudiosrc ! "
+-                                     "queue leaky=2 max-size-buffers=400 ! audioconvert ! audioresample ! opusenc ! "
+-                                     "audio/x-opus,rate=48000,channels=2 ! appsink sync=TRUE emit-signals=TRUE name=appsink-audio",
+-                                     &error);
+-            }
++                    gst_parse_launch(
++                        "v4l2src device=/dev/video0 ! queue ! jpegdec ! "
++                        "videoscale ! video/x-raw,width=1280,height=720 ! "
++                        "videorate ! video/x-raw,framerate=15/1 ! "
++                        "videoconvert ! x264enc bframes=0 speed-preset=veryfast bitrate=512 byte-stream=TRUE tune=zerolatency ! "
++                        "video/x-h264,stream-format=byte-stream,alignment=au,profile=baseline ! "
++                        "appsink sync=TRUE emit-signals=TRUE name=appsink-video alsasrc device=hw:0 ! "
++                        "queue leaky=2 max-size-buffers=400 ! audioconvert ! audioresample ! opusenc ! "
++                        "audio/x-opus,rate=48000,channels=2 ! appsink sync=TRUE emit-signals=TRUE name=appsink-audio",
++                        &error);
++                    /**
++                    * TEST Pipeline (-e forces EOS on SIGHUP)
++                    gst-launch-1.0  -e \
++                        v4l2src device=/dev/video0 ! queue ! jpegdec ! \
++                        videoscale ! video/x-raw,width=1280,height=720 ! \
++                        videorate ! video/x-raw,framerate=15/1 ! \
++                        videoconvert ! x264enc bframes=0 speed-preset=veryfast bitrate=512 byte-stream=TRUE tune=zerolatency ! \
++                        mux. alsasrc device=hw:0 ! queue ! audioconvert ! audioresample ! voaacenc ! aacparse ! qtmux name=mux ! \
++                        filesink location=test.mp4 sync=false
++                    */
++                }
+             break;
+     }
+ 
++    if (error != NULL) {
++        printf("KVS GStreamer Master] sendGstreamerAudioVideo(): Failed parsing pipeline: %s (domain - %d; code - %d) \n",
++            error->message, error->domain, error->code );
++    }
++
+     if (pipeline == NULL) {
+         printf("[KVS GStreamer Master] sendGstreamerAudioVideo(): Failed to launch gstreamer, operation returned status code: 0x%08x \n",
+                STATUS_INTERNAL_ERROR);
+@@ -269,8 +300,6 @@ PVOID receiveGstreamerAudioVideo(PVOID args)
+         goto CleanUp;
+     }
+ 
+-    // TODO: Wire video up with gstreamer pipeline
+-
+     switch (pSampleStreamingSession->pAudioRtcRtpTransceiver->receiver.track.codec) {
+         case RTC_CODEC_OPUS:
+             audioDescription = "appsrc name=appsrc-audio ! opusparse ! decodebin ! autoaudiosink";
